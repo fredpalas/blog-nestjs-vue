@@ -1,0 +1,36 @@
+# Declaración de servicios para Podium.
+#
+# Cada clave de primer nivel es un serviceName. Este repo declara dos, así que
+# Podium descubre ambos y despliega cada uno como su propia Application, con el
+# mismo hash de proyecto:
+#
+#   api  ->  api-{hash}.apperture.dev
+#   web  ->  web-{hash}.apperture.dev
+#
+# El frontend no recibe la URL de la API por configuración: la deriva de su
+# propio hostname sustituyendo el prefijo `web-` por `api-` (ver
+# web/src/lib/api.ts). Así no depende de variables de entorno en el build, que
+# Podium todavía no inyecta.
+
+api:
+  src: api
+  lang: nodejs
+  framework: nestjs
+  environment:
+    NODE_ENV: production
+    CORS_ORIGIN: "*"
+    CLUSTER_WORKERS: "2"
+    DB_HOST: ${DB_HOST}
+    DB_PORT: ${DB_PORT}
+    DB_NAME: ${DB_NAME}
+    DB_USER: ${DB_USER}
+    DB_PASSWORD: ${DB_PASSWORD}
+  database:
+    enable: true
+
+web:
+  src: web
+  lang: nodejs
+  framework: vue
+  environment:
+    NODE_ENV: production
