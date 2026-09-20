@@ -85,7 +85,7 @@ puede deducir dónde está su API sin saber el hash de antemano.
 `api` y `web`, construye cada uno con su plantilla (`nodejs/nestjs` y
 `nodejs/vue`) y publica dos URLs.
 
-Tres cosas que **hoy** no funcionarían todavía en un despliegue real, y que no
+Dos cosas que **hoy** no funcionarían todavía en un despliegue real, y que no
 son culpa de este repo:
 
 - **La API necesita Postgres** y Podium no monta base de datos por tenant
@@ -95,9 +95,12 @@ son culpa de este repo:
   recibe sólo imagen, host, hash y puerto. Por eso el frontend deriva la URL de
   la API del hostname en vez de leerla de una variable, y por eso los valores
   por defecto del código están elegidos para funcionar sin configuración.
-- **`npm start` en un proyecto de Nest es `nest start`**, el CLI en modo
-  desarrollo. `npm run start:prod` (`node dist/main`) es el arranque real de
-  producción.
+
+Montar este repo destapó además un fallo en la plantilla `nodejs/nestjs` de
+Podium, ya corregido allí: arrancaba con `npm start`, que en cualquier proyecto
+generado por el CLI de Nest es `nest start` —el CLI recompilando dentro del
+contenedor de producción en cada reinicio del pod—. Ahora usa
+`npm run start:prod`.
 
 ## Qué se cambió respecto a `php-barcelona/ts-test`
 
