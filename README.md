@@ -10,13 +10,12 @@ plantilla de build y su propia URL pública.
 ```
 api/    NestJS 11 + MikroORM (copiado de php-barcelona/ts-test)
 web/    Vue 3 + Vite + vue-router
-db/     esquema de `posts` y datos de ejemplo
 ```
 
 ## Arrancarlo en local
 
-**1. Base de datos** (Postgres con el esquema y cinco posts publicados, más uno
-en borrador para comprobar que el filtro de estado funciona):
+**1. Base de datos** (Postgres vacío — el esquema y los datos los crea la propia
+API al arrancar):
 
 ```bash
 docker compose up -d
@@ -35,6 +34,11 @@ npm run start:prod
 ```bash
 curl "http://localhost:3000/api/posts?limit=5&order=desc"
 ```
+
+Al arrancar, la API aplica las migraciones pendientes y siembra el blog si está
+vacío: cinco posts publicados y uno en borrador, que sirve para comprobar que el
+filtro de estado funciona. Es idempotente —arrancar otra vez no duplica nada— y
+se puede desactivar con `MIGRATE_ON_BOOT=false`.
 
 **3. Frontend** en `http://localhost:5173`:
 
@@ -85,16 +89,20 @@ puede deducir dónde está su API sin saber el hash de antemano.
 `api` y `web`, construye cada uno con su plantilla (`nodejs/nestjs` y
 `nodejs/vue`) y publica dos URLs.
 
-Dos cosas que **hoy** no funcionarían todavía en un despliegue real, y que no
-son culpa de este repo:
+La base de datos la monta Podium: el bloque `database:` del `podium.yaml` declara
+**dónde** quiere la aplicación recibir cada dato (`${DB_NAME}`, `${DB_USER}`…), y
+el chart crea un `Cluster` de CNPG para el servicio e inyecta ahí las credenciales
+que CNPG genera. El esquema y los datos los pone la propia API al arrancar, que es
+la única ventana que hay: un tenant no puede ejecutar comandos aparte.
 
-- **La API necesita Postgres** y Podium no monta base de datos por tenant
-  todavía. El bloque `database:` del `podium.yaml` queda declarado para cuando
-  exista.
-- **Las variables de entorno declaradas no llegan al pod**: el chart de tenant
-  recibe sólo imagen, host, hash y puerto. Por eso el frontend deriva la URL de
-  la API del hostname en vez de leerla de una variable, y por eso los valores
-  por defecto del código están elegidos para funcionar sin configuración.
+Una cosa que **hoy** no funciona todavía en un despliegue real, y que no es culpa
+de este repo:
+
+- **Las variables del bloque `environment:` no llegan al pod todavía**: el chart
+  de tenant inyecta las de base de datos, pero no las demás. Por eso el frontend
+  deriva la URL de la API del hostname en vez de leerla de una variable, y por
+  eso los valores por defecto del código están elegidos para funcionar sin
+  configuración.
 
 Montar este repo destapó además un fallo en la plantilla `nodejs/nestjs` de
 Podium, ya corregido allí: arrancaba con `npm start`, que en cualquier proyecto
@@ -104,7 +112,7 @@ contenedor de producción en cada reinicio del pod—. Ahora usa
 
 ## Qué se cambió respecto a `php-barcelona/ts-test`
 
-El código de la API viene de ahí tal cual, con tres ajustes mínimos:
+El código de la API viene de ahí tal cual, con estos ajustes:
 
 - **CORS** (`app.enableCors`): el frontend vive en otro dominio, así que sin esto
   el navegador descarta la respuesta aunque la API conteste 200.
@@ -112,3 +120,8 @@ El código de la API viene de ahí tal cual, con tres ajustes mínimos:
   Podium corre con 1 CPU y ~1 Gi, y diez workers se comen la memoria antes de
   servir la primera petición.
 - **`.env.example`** en lugar de un `.env` con valores reales.
+- **Migraciones y seeder** (`@mikro-orm/migrations`, `@mikro-orm/seeder`), con la
+  configuración de MikroORM extraída a `src/mikro-orm.config.ts` para que la
+  compartan la aplicación, el arranque y la CLI. El proceso primario prepara la
+  base **antes** de levantar los workers: que varios migren a la vez es una
+  carrera con final incierto.

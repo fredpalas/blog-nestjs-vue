@@ -18,15 +18,22 @@ api:
   framework: nestjs
   environment:
     NODE_ENV: production
-    CORS_ORIGIN: "*"
-    CLUSTER_WORKERS: "2"
-    DB_HOST: ${DB_HOST}
-    DB_PORT: ${DB_PORT}
-    DB_NAME: ${DB_NAME}
-    DB_USER: ${DB_USER}
-    DB_PASSWORD: ${DB_PASSWORD}
+  # Podium monta un Cluster de CNPG para este servicio e inyecta sus
+  # credenciales en las variables que se piden aquí. No se declaran valores:
+  # se declara *dónde* quiere la aplicación recibir cada dato. Las contraseñas
+  # las genera CNPG y viajan por secretKeyRef — Podium no las ve.
+  #
+  # Los nombres coinciden con los que ya lee api/src/mikro-orm.config.ts, y el
+  # esquema y los datos los crea la propia aplicación al arrancar (migraciones
+  # + seeder, ver api/src/main.ts): un tenant no tiene forma de ejecutar
+  # comandos aparte.
   database:
     enable: true
+    database: ${DB_NAME}
+    user: ${DB_USER}
+    password: ${DB_PASSWORD}
+    host: ${DB_HOST}
+    port: ${DB_PORT}
 
 web:
   src: web

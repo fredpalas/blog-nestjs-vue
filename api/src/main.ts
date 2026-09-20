@@ -4,6 +4,9 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module.js';
 import cluster from 'cluster';
 import * as os from 'os';
+import { MikroORM } from '@mikro-orm/postgresql';
+import mikroOrmConfig from './mikro-orm.config.js';
+import { DatabaseSeeder } from './seeders/DatabaseSeeder.js';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -27,6 +30,40 @@ async function bootstrap() {
 }
 
 // Clustering logic
+/**
+ * Deja la base lista antes de servir: aplica las migraciones pendientes y
+ * siembra si está vacía.
+ *
+ * Corre en el proceso primario y antes de levantar los workers, por dos
+ * razones: que N workers migren a la vez es una carrera con final incierto, y
+ * un tenant de Podium no tiene forma de ejecutar comandos aparte — el pod
+ * arranca y punto, así que esto es la única ventana que hay.
+ *
+ * Se puede desactivar con MIGRATE_ON_BOOT=false para quien prefiera gestionar
+ * su esquema a mano.
+ */
+async function prepareDatabase(): Promise<void> {
+  if (process.env.MIGRATE_ON_BOOT === 'false') {
+    console.log('⏭️  MIGRATE_ON_BOOT=false: no se toca la base de datos');
+    return;
+  }
+
+  const orm = await MikroORM.init(mikroOrmConfig);
+
+  try {
+    const pending = await orm.getMigrator().getPendingMigrations();
+    if (pending.length > 0) {
+      console.log(`🗃️  Aplicando ${pending.length} migración(es) pendiente(s)...`);
+      await orm.getMigrator().up();
+    }
+
+    await orm.getSeeder().seed(DatabaseSeeder);
+    console.log('✅ Base de datos lista');
+  } finally {
+    await orm.close(true);
+  }
+}
+
 if (cluster.isPrimary) {
   const numCPUs = os.cpus().length;
   // Por defecto, uno por CPU con tope de 2: un tenant de Podium corre con
@@ -44,10 +81,18 @@ if (cluster.isPrimary) {
   console.log(`   - OTEL enabled: ${process.env.OTEL_ENABLED !== 'false'}`);
   console.log('─'.repeat(50));
 
-  // Fork workers
-  for (let i = 0; i < workers; i++) {
-    cluster.fork();
-  }
+  // Fork workers — sólo cuando la base está lista, para que ningún worker
+  // reciba tráfico contra un esquema que todavía no existe.
+  prepareDatabase()
+    .then(() => {
+      for (let i = 0; i < workers; i++) {
+        cluster.fork();
+      }
+    })
+    .catch((error) => {
+      console.error('❌ No se pudo preparar la base de datos:', error);
+      process.exit(1);
+    });
 
   // Handle worker exits
   cluster.on('exit', (worker, code, signal) => {
