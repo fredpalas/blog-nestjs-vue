@@ -18,6 +18,9 @@ api:
   framework: nestjs
   environment:
     NODE_ENV: production
+    # Sale de la clave HOSTIUM_PROBE del Secret podium-secrets del namespace:
+    # comprueba que una referencia llega al contenedor junto a la base de datos.
+    HOSTIUM_PROBE: ${HOSTIUM_PROBE}
   # Podium monta un Cluster de CNPG para este servicio e inyecta sus
   # credenciales en las variables que se piden aquí. No se declaran valores:
   # se declara *dónde* quiere la aplicación recibir cada dato. Las contraseñas
